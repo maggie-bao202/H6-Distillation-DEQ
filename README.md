@@ -5,7 +5,7 @@ Reproduces Quantinuum's Magic-H6 `[[6,2,2]]` "0-level distillation" protocol
 Stim circuit — for loading into [Bloqade Studio's QEC tool](https://bloqade.quera.com/studio/qec/)
 — and exports it to Microsoft's `.deq` DSL.
 
-## ⚠️ This is an H-state protocol, not a T-state one — read before using
+## This is an H-state protocol, not a T-state one — read before using
 
 It's tempting to think of this as "T-gate magic state distillation." It isn't:
 
