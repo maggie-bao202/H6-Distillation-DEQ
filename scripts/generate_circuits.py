@@ -70,6 +70,15 @@ def main() -> None:
     check_circuit = distillation_test_circuit(p=0.0, m=0.0)
     _export("h6_dist_check", check_circuit, check_system, OUT_DIR)
 
+    print()
+    print("--- same circuit, noisy (p = m = 0.001, near the paper's real hardware")
+    print("    operating point, well below the ~0.02 breakeven threshold) ---")
+    noisy_check_system = QECSystem()
+    noisy_check_system.add_patch(HSixCode(), name="c622")
+    noisy_check_circuit = distillation_test_circuit(p=0.001, m=0.001)
+    # No "." in the GADGET name: deq's IDENT grammar is ASCII_ALPHA (ASCII_ALPHANUMERIC|"_")*.
+    _export("h6_dist_check_noisy_p1en3", noisy_check_circuit, noisy_check_system, OUT_DIR)
+
 
 if __name__ == "__main__":
     main()

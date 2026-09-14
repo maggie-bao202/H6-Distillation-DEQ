@@ -68,6 +68,11 @@ the paper's own hardware-calibrated noise model uses, plus this repo's simplifie
 existing trapped-ion hardware" that isn't specified in the abstract/intro). Not
 identical, but a real, quantitative reproduction of the claimed scaling law.
 
+**Full walkthrough**: [`notebooks/end_to_end_distillation.ipynb`](notebooks/end_to_end_distillation.ipynb)
+runs all three steps (prepare the noisy resource state → encode + Bell-pair check →
+measure results) end to end, including the breakeven plot against the unencoded
+reference (`generated/breakeven_plot.png`).
+
 ## Setup
 
 LightStim is not on PyPI. Two ways to get it:
@@ -99,9 +104,13 @@ Writes to `generated/` (each as both `.stim` and, where a `QECSystem` is availab
 - `h6_dist_bare_encoder` — just the 6-qubit encoder, no checks at all.
 - `h6_dist_level1_proxy` — the non-fault-tolerant proxy (fault distance 1). Kept for
   comparison; don't use this one to represent the protocol.
-- `h6_dist_check` — **the real protocol** (fault distance 2): `distillation_test_circuit()`,
-  encoder + Bell-pair H-check + final readout, with the two X-stabilizer checks and the
-  two logical-X observables wired up.
+- `h6_dist_check` — **the real protocol, noiseless** (fault distance 2):
+  `distillation_test_circuit()`, encoder + Bell-pair H-check + final readout, with the
+  two X-stabilizer checks and the two logical-X observables wired up.
+- `h6_dist_check_noisy_p1en3` — the same circuit at `p = m = 0.001` (near the paper's
+  real hardware operating point, well below the ~0.021 breakeven threshold found in the
+  end-to-end notebook) — `DEPOLARIZE1`/`DEPOLARIZE2`/`MR(p)` noise wired in throughout,
+  still validates against the real `deq` grammar.
 
 ## The `[[6,2,2]]` code's canonical logical convention
 
