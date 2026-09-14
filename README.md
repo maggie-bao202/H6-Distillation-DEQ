@@ -1,32 +1,72 @@
 # H6-Distillation-DEQ
 
-Generates Stim circuits for Quantinuum's Magic-H6 `[[6,2,2]]` level-1 distillation
-protocol — for loading into [Bloqade Studio's QEC tool](https://bloqade.quera.com/studio/qec/)
-— and exports the same circuit to Microsoft's `.deq` DSL.
+Reproduces Quantinuum's Magic-H6 `[[6,2,2]]` "0-level distillation" protocol
+(arXiv:[2506.14688](https://arxiv.org/abs/2506.14688), "Breaking even with magic") as a
+Stim circuit — for loading into [Bloqade Studio's QEC tool](https://bloqade.quera.com/studio/qec/)
+— and exports it to Microsoft's `.deq` DSL.
 
-All circuit-building logic is reused from [LightStim](https://github.com/QuEraComputing/LightStim)'s
-existing `lightstim.qec_code.H_six` module (a direct, tested port of
-[Quantinuum/Magic-H6](https://github.com/Quantinuum/Magic-H6)'s `Code614.py`), and the
-`.deq` export reuses `lightstim.deq.export_deq` (currently on the `Light-DEQ` branch of
-[maggie-bao202/LightStim](https://github.com/maggie-bao202/LightStim)).
+## ⚠️ This is an H-state protocol, not a T-state one — read before using
 
-## ⚠️ This is a proxy circuit, not a verified distillation result
+It's tempting to think of this as "T-gate magic state distillation." It isn't:
 
-`level1_proxy_circuit()` runs and post-selects cleanly, but per LightStim's own
-`playground/magic_h6/H_six_roadmap_status.ipynb` (roadmap "Step 3"):
+- The resource state is `|H+⟩ = cos(π/8)|0⟩ + sin(π/8)|1⟩` — the +1 eigenstate of the
+  **Hadamard** operator — used to implement a logical `R_y(π/4)` rotation and a
+  **controlled-Hadamard (CH) gate**. Not a T-gate, not `|T⟩`.
+- It's **not** distillation from multiple noisy copies (à la Bravyi–Kitaev). The paper
+  calls it **"0-level distillation"**: encode one candidate `|H+,H+⟩_L` directly via an
+  arbitrary-state encoder, verify it with a **Bell-pair ancilla check** of the logical
+  Hadamard operator, and **discard and retry** if the check fails. The `O(p²)` claim is
+  suppression of *circuit-level two-qubit gate error* `p` (a standard flag-qubit
+  argument), not of an externally-supplied "input state infidelity."
 
-- `stim.Circuit.shortest_graphlike_error()` shows it is **circuit fault distance 1** — a
-  single undetected physical fault can flip the logical output — so under circuit-level
-  noise its post-selected output logical error rate scales as **O(p)**, not the **O(p²)**
-  the Magic-H6 protocol targets.
-- Magic-H6's real distillation claim is **O(p_in²) suppression of the *input* `|H⟩`-state
-  infidelity** (`p_in → p_in²`), which needs a dedicated `p_in` injection channel that
-  doesn't exist yet anywhere in this stack.
+Both circuit variants are provided; only one of them matches the real protocol:
 
-Treat this as a structurally-faithful starting point (correct code, correct encoder,
-correct canonical logical convention — see below) to build the real, flag-verified
-distillation circuit on top of, not as a finished result. `bare_dist_encoder_circuit()`
-is even more minimal: just the `|0⟩⁶ → |++⟩_L` encoder, no syndrome extraction at all.
+| | `level1_proxy_circuit()` | `distillation_test_circuit()` |
+|---|---|---|
+| Source | LightStim's own port (encoder only) + a generic SE round | Verbatim port of `Code614.py`'s actual `get_dist_circ` (encoder + Bell-pair check fused) |
+| Circuit fault distance | **1** (not fault-tolerant) | **2** (matches the paper's claim) |
+| Scaling under noise | O(p) | **O(p²)**, empirically slope ≈ 2.0–2.1 here, paper reports 2.08 |
+
+**Use `distillation_test_circuit()`** (in `h6_distillation_deq.h_check`) — it's the one
+that's actually validated against the paper's own result, below.
+
+Since Stim can't represent the true non-Clifford `|H+⟩` state, both circuits substitute
+the Clifford `|+⟩` state (`R` then `H`) — exactly the trick the paper's own Section III
+uses for its scaling-law simulations ("replacing the `|H+,H+⟩_L` state ... with the
+`|+,+⟩_L` state ... to efficiently simulate the protocol"). This validates the protocol's
+circuit-level fault tolerance and error scaling, not the magic state's own fidelity
+(that needs a non-Clifford simulator — see the PPVM note in LightStim's Light-DEQ plan).
+
+## Validated result
+
+```bash
+.venv/bin/python -c "
+import numpy as np
+from h6_distillation_deq import run_p_sweep
+ps = np.array([0.001, 0.002, 0.004, 0.008, 0.016])
+accept, ler = run_p_sweep(ps, shots=300_000)
+for p, a, l in zip(ps, accept, ler):
+    print(f'p={p:.4f}  accept={a:.4f}  post-selected LER={l:.3e}')
+slope, intercept = np.polyfit(np.log(ps), np.log(ler), 1)
+print(f'slope={slope:.2f} (paper: 2.08), prefactor~{np.exp(intercept):.0f} (paper: ~26)')
+"
+```
+```
+p=0.0010  accept=0.9676  post-selected LER=4.823e-05
+p=0.0020  accept=0.9380  post-selected LER=1.350e-04
+p=0.0040  accept=0.8791  post-selected LER=6.712e-04
+p=0.0080  accept=0.7746  post-selected LER=2.793e-03
+p=0.0160  accept=0.6026  post-selected LER=1.133e-02
+slope=2.01 (paper: 2.08), prefactor~45 (paper: ~26)
+```
+
+The exponent (the actual O(p²) *scaling* claim) matches closely. The prefactor differs by
+~1.7x, most likely from a different convention for "two-qubit gate error rate" between
+Stim's `DEPOLARIZE2(p)` (each of 15 non-identity two-qubit Paulis at `p/15`) and whatever
+the paper's own hardware-calibrated noise model uses, plus this repo's simplified
+`m = p` idle-memory-to-gate-error ratio (the paper uses a "ratio ... comparable to ...
+existing trapped-ion hardware" that isn't specified in the abstract/intro). Not
+identical, but a real, quantitative reproduction of the claimed scaling law.
 
 ## Setup
 
@@ -54,16 +94,16 @@ in `pyproject.toml` once the `.deq` export work merges to `main`.
 .venv/bin/python scripts/generate_circuits.py
 ```
 
-Writes to `generated/`:
-- `h6_dist_bare_encoder.stim` — the bare 6-qubit encoder, no detectors.
-- `h6_dist_level1_proxy.stim` — encoder + one SE round + Bell-pair H-check + X readout.
-- `h6_dist_level1_proxy.deq` — the same circuit as a `.deq` `CODE`/`GADGET` pair
-  (`CODE c622 [[6,2]]`, matching the code's canonical logical convention below),
-  validated against the real `deq`/`deqagram` grammar.
+Writes to `generated/` (each as both `.stim` and, where a `QECSystem` is available,
+`.deq`, validated against the real `deq`/`deqagram` grammar):
+- `h6_dist_bare_encoder` — just the 6-qubit encoder, no checks at all.
+- `h6_dist_level1_proxy` — the non-fault-tolerant proxy (fault distance 1). Kept for
+  comparison; don't use this one to represent the protocol.
+- `h6_dist_check` — **the real protocol** (fault distance 2): `distillation_test_circuit()`,
+  encoder + Bell-pair H-check + final readout, with the two X-stabilizer checks and the
+  two logical-X observables wired up.
 
 ## The `[[6,2,2]]` code's canonical logical convention
-
-(From LightStim's roadmap notebook — `HSixCode`'s registered stabilizers/logicals.)
 
 ```
 S^X_1 = X0 X1 X2 X3      S^Z_1 = Z0 Z1 Z2 Z3
@@ -77,24 +117,24 @@ Self-dual (`Hx == Hz`): transversal H is logical H, transversal S is logical S.
 ## Loading into Bloqade Studio
 
 **Confirmed working**: [bloqade.quera.com/studio/qec](https://bloqade.quera.com/studio/qec/)
-accepts raw `.deq` text pasted directly into its editor, and runs it through a real
-`deq` compile step server-side — this is how the `OUTPUT`-emission bug documented below
-was actually found (Studio's compiler caught something no local, grammar-only check
-could).
+accepts raw `.deq` text pasted directly into its editor, and compiles it server-side
+through a real `deq` compiler — this is how the `OUTPUT`-emission bug below was actually
+found (Studio's compiler caught something no local, grammar-only check could).
 
-Paste the contents of `generated/h6_dist_level1_proxy.deq` in. Studio's own default
-example (visible as a comment in a fresh session) shows the expected shape — separate
-`PrepareZ`/`Idle`/`MeasureZ`-style `GADGET`s per phase, each with matching `INPUT`/
-`OUTPUT` declarations, rather than one `.stim`-shaped monolithic gadget. This repo's
-generator currently emits the monolithic form (see `lightstim.deq.export_deq`'s scope
-notes) — it compiles and runs, but if Studio's UI expects the multi-gadget shape for
-step-by-step simulation, splitting into separate gadgets is a natural next step.
+Paste `generated/h6_dist_check.deq` in. Studio's own default example (visible as a
+comment in a fresh session) shows separate `PrepareZ`/`Idle`/`MeasureZ`-style `GADGET`s
+per phase with matching `INPUT`/`OUTPUT` declarations, rather than one monolithic gadget
+— this repo currently emits the monolithic form (see `lightstim.deq.export_deq`'s scope
+notes); it compiles and runs, but if Studio's UI wants the multi-gadget shape for
+step-by-step simulation, splitting is a natural next step. I still don't know what
+Studio's actual *simulate* button/noise-config UI looks like beyond the compile step —
+if you find it, let me know and I'll adapt this repo's output to match.
 
 ## A real bug this caught: `OUTPUT` after a destructive measurement
 
-The circuit ends in `MX 0 1 2 3 4 5` — a full destructive readout. An earlier version of
-`lightstim.deq.export_deq` still declared `OUTPUT H6Code 0 1 2 3 4 5` regardless, and
-Studio's compiler correctly rejected it:
+`h6_dist_level1_proxy` ends in `MX 0 1 2 3 4 5` — a full destructive readout. An earlier
+version of `lightstim.deq.export_deq` still declared `OUTPUT H6Code 0 1 2 3 4 5`
+regardless, and Studio's compiler correctly rejected it:
 
 ```
 GADGET 'H6DistillationLevel1Proxy' is invalid: the following output stabilizer(s) cannot
@@ -104,12 +144,14 @@ cannot be checked by the gadget's outcome code: ...
 
 There's no code left to "output" once all its qubits have been measured out. Fixed
 upstream in LightStim (`export_deq` now omits `OUTPUT` whenever a patch's qubits are all
-destructively measured by the end of the circuit) — regenerate with
-`scripts/generate_circuits.py` to pick up the fix; `generated/h6_dist_level1_proxy.deq`
-here is already current.
+destructively measured by the end of the circuit).
 
 ## Tests
 
 ```bash
 .venv/bin/pytest tests/ -q
 ```
+
+`tests/test_h_check.py` is the important one: it asserts `distillation_test_circuit()` is
+circuit fault distance 2 and that its logical error rate actually scales as `p²` (not just
+that it "runs"), which is the real claim being reproduced.

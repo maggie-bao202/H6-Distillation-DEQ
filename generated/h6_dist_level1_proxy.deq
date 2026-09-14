@@ -9,7 +9,7 @@ CODE c622 [[6,2]] {
     STABILIZER Z2*Z3*Z4*Z5
 }
 
-GADGET H6DistillationLevel1Proxy {
+GADGET h6_dist_level1_proxy {
     R 0 1 2 3 4 5
     TICK
     H 0 1 2 4
