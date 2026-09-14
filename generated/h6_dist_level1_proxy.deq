@@ -55,5 +55,4 @@ GADGET H6DistillationLevel1Proxy {
     DETECTOR rec[-12] rec[-6] rec[-5] rec[-4] rec[-3]
     DETECTOR rec[-11] rec[-4] rec[-3] rec[-2] rec[-1]
     OBSERVABLE_INCLUDE rec[-6] rec[-4] rec[-2]
-    OUTPUT c622 0 1 2 3 4 5
 }

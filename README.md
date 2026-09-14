@@ -76,21 +76,37 @@ Self-dual (`Hx == Hz`): transversal H is logical H, transversal S is logical S.
 
 ## Loading into Bloqade Studio
 
-I have **not been able to verify the exact import steps** for
-[bloqade.quera.com/studio/qec](https://bloqade.quera.com/studio/qec/) — it's a
-client-rendered web app I can't drive from here, and I could not decode a shared
-session-state URL to inspect its schema directly. What's confirmed instead:
+**Confirmed working**: [bloqade.quera.com/studio/qec](https://bloqade.quera.com/studio/qec/)
+accepts raw `.deq` text pasted directly into its editor, and runs it through a real
+`deq` compile step server-side — this is how the `OUTPUT`-emission bug documented below
+was actually found (Studio's compiler caught something no local, grammar-only check
+could).
 
-- QuEra's [`bloqade-circuit`](https://github.com/QuEraComputing/bloqade-circuit) (the
-  eDSL Studio is presumably built on) ships a dedicated `bloqade.stim` module for Stim
-  circuit I/O, so a `.stim` file is a reasonable bet for whatever import path exists.
-- If Studio instead expects circuits written directly in Bloqade's own `squin` eDSL
-  (Python-like kernel functions) rather than accepting raw Stim text, the `.stim` files
-  here would need a manual translation step first.
+Paste the contents of `generated/h6_dist_level1_proxy.deq` in. Studio's own default
+example (visible as a comment in a fresh session) shows the expected shape — separate
+`PrepareZ`/`Idle`/`MeasureZ`-style `GADGET`s per phase, each with matching `INPUT`/
+`OUTPUT` declarations, rather than one `.stim`-shaped monolithic gadget. This repo's
+generator currently emits the monolithic form (see `lightstim.deq.export_deq`'s scope
+notes) — it compiles and runs, but if Studio's UI expects the multi-gadget shape for
+step-by-step simulation, splitting into separate gadgets is a natural next step.
 
-**Please check the Studio UI directly for an actual import/paste option**, and let me
-know what you find — I'll fix this README (and the generation script's output format,
-if needed) once it's confirmed.
+## A real bug this caught: `OUTPUT` after a destructive measurement
+
+The circuit ends in `MX 0 1 2 3 4 5` — a full destructive readout. An earlier version of
+`lightstim.deq.export_deq` still declared `OUTPUT H6Code 0 1 2 3 4 5` regardless, and
+Studio's compiler correctly rejected it:
+
+```
+GADGET 'H6DistillationLevel1Proxy' is invalid: the following output stabilizer(s) cannot
+be expressed as a linear combination of input-virtual and internal measurements, so they
+cannot be checked by the gadget's outcome code: ...
+```
+
+There's no code left to "output" once all its qubits have been measured out. Fixed
+upstream in LightStim (`export_deq` now omits `OUTPUT` whenever a patch's qubits are all
+destructively measured by the end of the circuit) — regenerate with
+`scripts/generate_circuits.py` to pick up the fix; `generated/h6_dist_level1_proxy.deq`
+here is already current.
 
 ## Tests
 
