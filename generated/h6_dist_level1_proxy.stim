@@ -1,0 +1,59 @@
+QUBIT_COORDS(0, 0) 0
+QUBIT_COORDS(2, 0) 1
+QUBIT_COORDS(4, 0) 2
+QUBIT_COORDS(6, 0) 3
+QUBIT_COORDS(8, 0) 4
+QUBIT_COORDS(10, 0) 5
+QUBIT_COORDS(3, 1) 6
+QUBIT_COORDS(7, 1) 7
+QUBIT_COORDS(3, -1) 8
+QUBIT_COORDS(7, -1) 9
+QUBIT_COORDS(0, 3) 10
+QUBIT_COORDS(2, 3) 11
+R 0 1 2 3 4 5
+TICK
+H 0 1 2 4
+CX 2 3 4 5 2 0 3 1 0 4 1 5 4 2 5 3
+R 6 7 8 9
+TICK[SE_start]
+H 6 7
+TICK
+CX 6 0 7 4
+TICK
+CX 6 3 7 2
+TICK
+CX 6 1 7 3
+TICK
+CX 6 2 7 5
+TICK
+CX 0 8 4 9
+TICK
+CX 3 8 2 9
+TICK
+CX 1 8 3 9
+TICK
+CX 2 8 5 9
+TICK
+H 6 7
+TICK
+M 6 7 8 9
+SHIFT_COORDS(0, 0, 1)
+DETECTOR(3, 1, 0) rec[-4]
+DETECTOR(7, 1, 0) rec[-3]
+DETECTOR(3, -1, 0) rec[-2]
+DETECTOR(7, -1, 0) rec[-1]
+R 10 11
+H 10
+TICK[SE_start]
+CX 10 11 10 0 11 1 10 2 11 3 10 4 11 5 10 11
+H 10
+TICK
+M 10 11
+SHIFT_COORDS(0, 0, 1)
+DETECTOR(2, 3, 0) rec[-1]
+TICK
+MX 0 1 2 3 4 5
+OBSERVABLE_INCLUDE(0) rec[-8] rec[-6] rec[-5] rec[-4] rec[-3] rec[-2] rec[-1]
+DETECTOR(3, 1, 1) rec[-12] rec[-6] rec[-5] rec[-4] rec[-3]
+DETECTOR(7, 1, 1) rec[-11] rec[-4] rec[-3] rec[-2] rec[-1]
+OBSERVABLE_INCLUDE(1) rec[-6] rec[-4] rec[-2]
